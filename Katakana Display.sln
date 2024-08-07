@@ -1,0 +1,19 @@
+﻿Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2012
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Katakana Display", "Katakana Display.csproj", "{11D24AA1-684B-4A5C-8EFE-6053D9A28EBE}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+	Debug|Any CPU = Debug|Any CPU
+	ExportDebug|Any CPU = ExportDebug|Any CPU
+	ExportRelease|Any CPU = ExportRelease|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{11D24AA1-684B-4A5C-8EFE-6053D9A28EBE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{11D24AA1-684B-4A5C-8EFE-6053D9A28EBE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{11D24AA1-684B-4A5C-8EFE-6053D9A28EBE}.ExportDebug|Any CPU.ActiveCfg = ExportDebug|Any CPU
+		{11D24AA1-684B-4A5C-8EFE-6053D9A28EBE}.ExportDebug|Any CPU.Build.0 = ExportDebug|Any CPU
+		{11D24AA1-684B-4A5C-8EFE-6053D9A28EBE}.ExportRelease|Any CPU.ActiveCfg = ExportRelease|Any CPU
+		{11D24AA1-684B-4A5C-8EFE-6053D9A28EBE}.ExportRelease|Any CPU.Build.0 = ExportRelease|Any CPU
+	EndGlobalSection
+EndGlobal
