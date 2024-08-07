@@ -19,8 +19,17 @@ environment = SubResource( 1 )
 script = ExtResource( 2 )
 
 [node name="Camera" type="Camera" parent="."]
-transform = Transform( 1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, -190.81, 2, 112.765 )
+transform = Transform( 1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, -177.81, 2, 109.765 )
 projection = 1
-size = 300.0
+size = 260.0
+
+[node name="Title" parent="." instance=ExtResource( 1 )]
+transform = Transform( 0.5, 0, 0, 0, 0.5, 0, 0, 0, 0.5, 41, 0, -3 )
+Text = "46セグメントディスプレイ"
+Height = 12
+Width = 1
 
 [node name="MeshInstance" parent="." instance=ExtResource( 1 )]
+Text = "プレースホルダーテキスト"
+Height = 10
+Width = 11
