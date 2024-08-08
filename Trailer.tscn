@@ -1,0 +1,47 @@
+[gd_scene load_steps=5 format=2]
+
+[ext_resource path="res://Unit.tscn" type="PackedScene" id=1]
+[ext_resource path="res://Display.cs" type="Script" id=2]
+
+[sub_resource type="Environment" id=1]
+background_mode = 1
+ambient_light_color = Color( 0.25098, 0.25098, 0.25098, 1 )
+glow_enabled = true
+glow_levels/7 = true
+glow_intensity = 8.0
+glow_blend_mode = 0
+glow_hdr_threshold = 0.7
+glow_hdr_scale = 1.0
+glow_high_quality = true
+
+[sub_resource type="QuadMesh" id=2]
+size = Vector2( 462, 260 )
+
+[node name="Spatial" type="WorldEnvironment"]
+environment = SubResource( 1 )
+script = ExtResource( 2 )
+
+[node name="Camera" type="Camera" parent="."]
+transform = Transform( 1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, -177.81, 2, 109.765 )
+projection = 1
+size = 260.0
+
+[node name="MeshInstance" type="MeshInstance" parent="Camera"]
+transform = Transform( 1, 0, 0, 0, 1, -1.06581e-14, 0, 1.06581e-14, 1, 0, 0, -6.588 )
+visible = false
+mesh = SubResource( 2 )
+skeleton = NodePath("../..")
+
+[node name="Right Card" parent="." instance=ExtResource( 1 )]
+transform = Transform( 1, 0, 0, 0, 1, 0, 0, 0, 1, -96, 0, -272 )
+Text = " 46セグメント    ディスプレイ"
+Height = 10
+Width = 2
+Color = Color( 1, 0.18, 0.18, 1 )
+
+[node name="Left Card" parent="." instance=ExtResource( 1 )]
+transform = Transform( 1, 0, 0, 0, 1, 0, 0, 0, 1, -216, 0, 270 )
+Text = "46 SEGMENT DISPLAY"
+Height = 10
+Width = 2
+Color = Color( 0.501961, 0.501961, 1, 1 )
