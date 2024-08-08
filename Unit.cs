@@ -28,6 +28,8 @@ public class Unit : Spatial
     [Export]
     public bool Editable { get; set; }
     [Export]
+    public bool Cursorless { get; set; }
+    [Export]
     public Color Color = new Color(0.5f, 0.5f, 1.0f);
 
     List<string> _editTextAbove;
@@ -42,6 +44,8 @@ public class Unit : Spatial
     const float CursorPeriod = 1.0f;
 
     const int Span = 3;
+    public const int SingleSegmentStart = 0x2460;
+    public const int NumSegments = 46;
 
 
     // Called when the node enters the scene tree for the first time.
@@ -83,6 +87,8 @@ public class Unit : Spatial
         
         var chars = Util.Chars(text);
         while (true) {
+            if (iter == chars.Count && mode == 0)
+                break;
             var str = iter < chars.Count ? chars[iter] : "";
             if (Util.Sutegana.Contains(str) ? mode == 2 : Util.Dakuten.Contains(str) ? mode == 1 : mode == 0) {
                 result.Add(str);
@@ -91,8 +97,6 @@ public class Unit : Spatial
                 result.Add("　");
             }
             mode = (mode + 1) % Span;
-            if (iter == chars.Count && mode == 0)
-                break;
         }
         return result;
     }
@@ -101,12 +105,14 @@ public class Unit : Spatial
         var editText = _editTextAbove.Concat(_editTextBelow.Reverse<string>()).ToList();
         for (int i = 0; i < Height * Width; ++i) {
             ulong field = Span * i >= editText.Count ? 0uL :
+                editText[Span * i + 0][0] >= SingleSegmentStart && editText[Span * i + 0][0] < SingleSegmentStart + NumSegments ?
+                    1uL << (editText[Span * i + 0][0] - SingleSegmentStart) :
                 Util.SegmentMap[$"{editText[Span * i + 0]}"] |
                 Util.SegmentMap[$"{editText[Span * i + 1]}"] |
                 Util.SegmentMap[$"{editText[Span * i + 2]}"];
             ulong color = (ulong)(Color.r8 | Color.g8 << 8 | Color.b8 << 16);
             
-            if (!Engine.EditorHint && Editable && i == CursorPos / Span && _cursorTime < 0.5)
+            if (!Engine.EditorHint && Editable && !Cursorless && i == CursorPos / Span && _cursorTime < 0.5)
                 field ^= _latin ? Util.LatinCursorBitfield : Util.CursorBitfield;
             if (_pendingPos != null && i >= _pendingPos / Span && i < CursorPos / Span)
                 field |= Util.PendingBitfield;
@@ -166,7 +172,11 @@ public class Unit : Spatial
         return special;
     }
 
-    public override void _Input(InputEvent @event)
+    public override void _Input(InputEvent @event) {
+        HandleInput(@event);
+    }
+
+    public void HandleInput(InputEvent @event)
     {
         if (Engine.EditorHint || !Editable) return;
         if (!(@event is InputEventKey)) return;
@@ -218,15 +228,17 @@ public class Unit : Spatial
 
         if ((KeyList)keyEvent.Scancode == KeyList.Enter) {
             _pendingPos = null;
+            _cursorTime = 0;
             return;
         }
 
         string letter = char.ConvertFromUtf32((int)keyEvent.Unicode);
         letter = Util.Normalize(letter);
-        if (!Util.SegmentMap.ContainsKey(letter))
+        if (!Util.SegmentMap.ContainsKey(letter) && ((int)keyEvent.Unicode < SingleSegmentStart || (int)keyEvent.Unicode >= SingleSegmentStart + NumSegments))
             return;
 
         var special = AddChar(letter);
+        _cursorTime = 0;
         if (_latin || special) {
             _pendingPos = null;
             return;
