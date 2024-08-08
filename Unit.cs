@@ -173,7 +173,8 @@ public class Unit : Spatial
     }
 
     public override void _Input(InputEvent @event) {
-        HandleInput(@event);
+        if (!(GetTree().CurrentScene is Trailer))
+            HandleInput(@event);
     }
 
     public void HandleInput(InputEvent @event)

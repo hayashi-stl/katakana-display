@@ -73,16 +73,17 @@ public class Trailer : WorldEnvironment
         }
     }
 
-    // Called when the node enters the scene tree for the first time.
-    public override void _Ready()
-    {
-        _faderMaterial = (SpatialMaterial)GetNode<MeshInstance>("Camera/Fader").GetSurfaceMaterial(0);
+    public override void _Input(InputEvent @event) {
+        if (!(@event is InputEventKey)) return;
+
+        var keyEvent = (InputEventKey)@event;
+        if (!@event.IsPressed() || keyEvent.Scancode != (uint)KeyList.T) return;
+
         const string TextPath = "Text";
         const string UnitPath = "Unit";
         const string Text50Path = "Text50";
 
         var tween = CreateTween();
-        tween.TweenInterval(1);
         DoCard(tween, "46Segment J", "46Segment E");
         FadeText(tween, TextPath, true);
         TypeText(tween, TextPath, "^^^^^^^^^naniconosouti? ^^omosiroina-.^^chottoijittemiyou.");
@@ -105,6 +106,12 @@ public class Trailer : WorldEnvironment
         TypeText(tween, TextPath, "^^^^^^   a\"i\"u\"e`o\"^^n'\"ra\"ma\"ka`\"E\"V\"E\"N\" L`A`T`I`N` L\"E\"T\"T\"E\"R\"S\"!\"^^^^^^^^^^");
         FadeText(tween, TextPath, false);
         DoCard(tween, "46Segment2 J", "46Segment2 E");
+    }
+
+    // Called when the node enters the scene tree for the first time.
+    public override void _Ready()
+    {
+        _faderMaterial = (SpatialMaterial)GetNode<MeshInstance>("Camera/Fader").GetSurfaceMaterial(0);
     }
 
 //  // Called every frame. 'delta' is the elapsed time since the previous frame.
