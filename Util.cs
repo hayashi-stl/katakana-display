@@ -180,13 +180,16 @@ public class Util {
 
     };
 
+    public const ulong CursorBitfield = 0b00_0000_0000_0000_0000_0000_0000_0000_0000_0000_0001_1000;
+    public const ulong SuteganaCursorBitfield = 0b00_0000_0000_0001_1000_0000_0000_0000_0000_0000_0000_0000;
+
     static Dictionary<string, string> NormalizationMapFunc() {
         string hankaku = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-=.,()[]{}·<>~!? ";
         string zenkaku = "ＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺａｂｃｄｅｆｇｈｉｊｋｌｍｎｏｐｑｒｓｔｕｖｗｘｙｚ０１２３４５６７８９" +
             "ー＝。、（）［］｛｝・〈〉〜！？　";
 
-        string withDakuten = "ガギグゲゴザジズゼゾダヂヅデドバビブベボヷヸゔヹヺヴ";
-        string withoutDakuten = "カキクケコサシスセソタチツテトハヒフヘホワヰうヱヲウ";
+        string withDakuten = "ガギグゲゴザジズゼゾダヂヅデドバビブベボヷヸヹヺヴ";
+        string withoutDakuten = "カキクケコサシスセソタチツテトハヒフヘホワヰヱヲウ";
 
         string withHandakuten = "パピプペポ";
         string withoutHandakuten = "ハヒフヘホ";
@@ -194,16 +197,28 @@ public class Util {
         string extraA = "゙゚\"\'＜＞";
         string extraB = "゛゜゛゜〈〉";
 
-        var dict = hankaku.Zip(zenkaku, (a, b) => ($"{a}", $"{b}"))
-            .Concat(withDakuten.Zip(withoutDakuten, (a, b) => ($"{a}", $"{b}゛")))
-            .Concat(withHandakuten.Zip(withoutHandakuten, (a, b) => ($"{a}", $"{b}゜")))
-            .Concat(extraA.Zip(extraB, (a, b) => ($"{a}", $"{b}")))
+        string hiragana = $"あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもや{Yi}ゆ{Ye}よらりるれろわゐ{Wu}ゑをん" +
+            $"がぎぐげござじずぜぞだぢづでどばびぶべぼゔぱぴぷぺぽ";
+        string katakana = $"アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤ{YI}ユ{YE}ヨラリルレロワヰ{WU}ヱヲン" +
+            $"ガギグゲゴザジズゼゾダヂヅデドバビブベボヴパピプペポ";
+
+        var dict = Chars(hankaku).Zip(Chars(zenkaku), (a, b) => (a, b))
+            .Concat(Chars(withDakuten).Zip(Chars(withoutDakuten), (a, b) => (a, $"{b}゛")))
+            .Concat(Chars(withHandakuten).Zip(Chars(withoutHandakuten), (a, b) => (a, $"{b}゜")))
+            .Concat(Chars(extraA).Zip(Chars(extraB), (a, b) => (a, b)))
+            .Concat(Chars(hiragana).Zip(Chars(katakana), (a, b) => (a, b)))
             .ToDictionary(pair => $"{pair.Item1}", pair => $"{pair.Item2}");
+        var prevDict = new Dictionary<string, string>(dict);
+        foreach (var key in prevDict.Keys) {
+            if (prevDict.ContainsKey(prevDict[key]))
+                dict[key] = prevDict[prevDict[key]]; // Sometimes you need both hiragana->katanana and dakuten separation.
+        }
+
         return dict;
     }
 
     public static readonly Dictionary<string, string> NormalizationMap = NormalizationMapFunc();
 
-    public static readonly HashSet<string> Dakuten =  "゛゜".ToCharArray().Select(c => $"{c}").ToHashSet();
-    public static readonly HashSet<string> Sutegana = "ァィゥェォャュョヮッ".ToCharArray().Select(c => $"{c}").ToHashSet();
+    public static readonly HashSet<string> Dakuten =  Chars("゛゜").ToHashSet();
+    public static readonly HashSet<string> Sutegana = Chars("ァィゥェォャュョヮッ").ToHashSet();
 }

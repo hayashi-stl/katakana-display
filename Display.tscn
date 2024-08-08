@@ -33,3 +33,4 @@ Width = 1
 Text = "プレースホルダーテキスト"
 Height = 10
 Width = 11
+Editable = true
