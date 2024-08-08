@@ -177,11 +177,13 @@ public class Util {
         {"？", 0b00_0000_0000_0000_0000_0000_0000_0000_1000_1010_0001_1000},
 
         {"　", 0b00_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000},
+        {"'", 0b00_0000_0000_0000_0000_0000_0000_0000_0000_1000_0000_0000},
 
         {Pending, PendingBitfield},
     };
 
     public const ulong CursorBitfield = 0b00_0000_0000_0000_0000_0000_0000_0000_0000_0000_0001_1000;
+    public const ulong LatinCursorBitfield = 0b00_0000_0000_0000_0000_0000_0000_0000_0000_0100_0101_1001;
     public const ulong SuteganaCursorBitfield = 0b00_0000_0000_0001_1000_0000_0000_0000_0000_0000_0000_0000;
     public const string Pending = "_";
     public const ulong PendingBitfield = 0b00_0000_0000_0000_0000_0010_0000_0000_0000_0000_0000_0000;
@@ -197,7 +199,7 @@ public class Util {
         string withHandakuten = "パピプペポ";
         string withoutHandakuten = "ハヒフヘホ";
 
-        string extraA = "゙゚\"\'＜＞";
+        string extraA = "゙゚\"`＜＞";
         string extraB = "゛゜゛゜〈〉";
 
         string hiragana = $"あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもや{Yi}ゆ{Ye}よらりるれろわゐ{Wu}ゑをん" +
@@ -223,8 +225,176 @@ public class Util {
     }
 
     public static readonly Dictionary<string, string> NormalizationMap = NormalizationMapFunc();
+    public static string Normalize(string text) {
+        return string.Join("", Chars(text).Select(c => NormalizationMap.ContainsKey(c) ? NormalizationMap[c] : c));
+    }
 
     public static readonly HashSet<string> Dakuten =  Chars("゛゜").ToHashSet();
     public static readonly HashSet<string> Sutegana = Chars("ァィゥェォャュョヮッ").ToHashSet();
-    public static readonly HashSet<string> Lowercase = Chars("ａｂｃｄｅｆｇｈｉｊｋｌｍｎｏｐｑｒｓｔｕｖｗｘｙｚ").ToHashSet();
+    public static readonly HashSet<string> Convertable = Chars("ａｂｃｄｅｆｇｈｉｊｋｌｍｎｏｐｑｒｓｔｕｖｗｘｙｚ［］'").ToHashSet();
+
+    // Based *loosely* off of https://stackoverflow.com/a/2012855    
+    // How loosely? That one is just a generic tree.
+    public class Trie
+    {
+        string _transformed = null;
+        string _leftover = null;
+        Dictionary<string, Trie> _children = new Dictionary<string, Trie>();
+
+        public Trie() {}
+
+        void AddEntryRecursive(List<string> key, string transformed, string leftover, string init)
+        {
+            if (_transformed == null) {
+                _transformed = init;
+                _leftover = "";
+            }
+
+            if (key.Count == 0) {
+                _transformed = transformed;
+                _leftover = leftover;
+                return;
+            }
+
+            var first = key[0];
+            if (!_children.ContainsKey(first))
+                _children[first] = new Trie();
+            key.RemoveAt(0);
+            _children[first].AddEntryRecursive(key, transformed, leftover, init + first);
+        }
+
+        public void AddEntry(string key, string transformed, string leftover)
+            => AddEntryRecursive(Chars(key), transformed, leftover, "");
+
+        // Two places to stop:
+        // • reached node with no children (do transform)
+        // • reached node with children and then tried to descend incorrectly (do transform instead)
+        (string, string)? LookupRecursive(List<string> s)
+        {
+            if (_children.Count == 0)
+                return (_transformed, _leftover + string.Join("", s));
+            if (s.Count == 0)
+                return null;
+
+            var first = s[0];
+            if (_children.ContainsKey(first)) {
+                s.RemoveAt(0);
+                return _children[first].LookupRecursive(s);
+            } else
+                return (_transformed, _leftover + string.Join("", s));
+        }
+
+        public (string Transformed, string Leftover) Lookup(string s)
+        {
+            string transformed = "";
+            string leftover = s;
+            while (true) {
+                var result = LookupRecursive(Chars(leftover));
+                if (result != null) {
+                    bool progress = result.Value.Item2.Length < leftover.Length;
+                    transformed += result.Value.Item1;
+                    leftover = result.Value.Item2;
+                    if (!progress) {
+                        transformed += leftover;
+                        leftover = "";
+                        break;
+                    }
+                } else {
+                    break;
+                }
+            }
+
+            return (transformed, leftover);
+        }
+    }
+
+    static Trie ConversionTrieFunc() {
+        var list = new List<(string, (string, string))>() {
+            (  "a", ("ア"    , "")), (  "i", ("イ"    , "")), (  "u", ("ウ"    , "")), (  "e", ("エ"    , "")), (  "o", ("オ"    , "")),
+            ( "ka", ("カ"    , "")), ( "ki", ("キ"    , "")), ( "ku", ("ク"    , "")), ( "ke", ("ケ"    , "")), ( "ko", ("コ"    , "")),
+            ("kya", ("キャ"  , "")), ("kyi", ("キィ"  , "")), ("kyu", ("キュ"  , "")), ("kye", ("キェ"  , "")), ("kyo", ("キョ"  , "")),
+            ( "qa", ("クァ"  , "")), ( "qi", ("クィ"  , "")), ( "qu", ("ク"    , "")), ( "qe", ("クェ"  , "")), ( "qo", ("クォ"  , "")),
+            ("kwa", ("クァ"  , "")), ("kwi", ("クィ"  , "")), ("kwu", ("クゥ"  , "")), ("kwe", ("クェ"  , "")), ("kwo", ("クォ"  , "")),
+            ( "ga", ("カ゛"  , "")), ( "gi", ("キ゛"  , "")), ( "gu", ("ク゛"  , "")), ( "ge", ("ケ゛"  , "")), ( "go", ("コ゛"  , "")),
+            ("gya", ("キ゛ャ", "")), ("gyi", ("キ゛ィ", "")), ("gyu", ("キ゛ュ", "")), ("gye", ("キ゛ェ", "")), ("gyo", ("キ゛ョ", "")),
+            ("gwa", ("ク゛ァ", "")), ("gwi", ("ク゛ィ", "")), ("gwu", ("ク゛ゥ", "")), ("gwe", ("ク゛ェ", "")), ("gwo", ("ク゛ォ", "")),
+            ( "ca", ("カ"    , "")), ( "ci", ("シ"    , "")), ( "cu", ("ク"    , "")), ( "ce", ("セ"    , "")), ( "co", ("コ"    , "")),
+            ( "sa", ("サ"    , "")), ( "si", ("シ"    , "")), ( "su", ("ス"    , "")), ( "se", ("セ"    , "")), ( "so", ("ソ"    , "")),
+            ("sya", ("シャ"  , "")), ("syi", ("シィ"  , "")), ("syu", ("シュ"  , "")), ("sye", ("シェ"  , "")), ("syo", ("ショ"  , "")),
+            ("sha", ("シャ"  , "")), ("shi", ("シ"    , "")), ("shu", ("シュ"  , "")), ("she", ("シェ"  , "")), ("sho", ("ショ"  , "")),
+            ( "za", ("サ゛"  , "")), ( "zi", ("シ゛"  , "")), ( "zu", ("ス゛"  , "")), ( "ze", ("セ゛"  , "")), ( "zo", ("ソ゛"  , "")),
+            ("zya", ("シ゛ャ", "")), ("zyi", ("シ゛ィ", "")), ("zyu", ("シ゛ュ", "")), ("zye", ("シ゛ェ", "")), ("zyo", ("シ゛ョ", "")),
+            ("zha", ("シ゛ャ", "")), ("zhi", ("シ゛"  , "")), ("zhu", ("シ゛ュ", "")), ("zhe", ("シ゛ェ", "")), ("zho", ("シ゛ョ", "")),
+            ( "ja", ("シ゛ャ", "")), ( "ji", ("シ゛"  , "")), ( "ju", ("シ゛ュ", "")), ( "je", ("シ゛ェ", "")), ( "jo", ("シ゛ョ", "")),
+            ("jya", ("シ゛ャ", "")), ("jyi", ("シ゛ィ", "")), ("jyu", ("シ゛ュ", "")), ("jye", ("シ゛ェ", "")), ("jyo", ("シ゛ョ", "")),
+            ( "ta", ("タ"    , "")), ( "ti", ("チ"    , "")), ( "tu", ("ツ"    , "")), ( "te", ("テ"    , "")), ( "to", ("ト"    , "")),
+            ("tya", ("チャ"  , "")), ("tyi", ("チィ"  , "")), ("tyu", ("チュ"  , "")), ("tye", ("チェ"  , "")), ("tyo", ("チョ"  , "")),
+            ("cha", ("チャ"  , "")), ("chi", ("チ"    , "")), ("chu", ("チュ"  , "")), ("che", ("チェ"  , "")), ("cho", ("チョ"  , "")),
+            ("tsa", ("ツァ"  , "")), ("tsi", ("ツィ"  , "")), ("tsu", ("ツ"    , "")), ("tse", ("ツェ"  , "")), ("tso", ("ツォ"  , "")),
+            ("tha", ("テャ"  , "")), ("thi", ("ティ"  , "")), ("thu", ("テュ"  , "")), ("the", ("テェ"  , "")), ("tho", ("テョ"  , "")),
+                                                             ("t'yu", ("テュ"  , "")),
+            ("twa", ("トァ"  , "")), ("twi", ("トィ"  , "")), ("twu", ("トゥ"  , "")), ("twe", ("トェ"  , "")), ("two", ("トォ"  , "")),
+                                     ("t'i", ("ティ"  , "")), ("t'u", ("トゥ"  , "")),
+            ( "da", ("タ゛"  , "")), ( "di", ("チ゛"  , "")), ( "du", ("ツ゛"  , "")), ( "de", ("テ゛"  , "")), ( "do", ("ト゛"  , "")),
+            ("dya", ("チ゛ャ", "")), ("dyi", ("チ゛ィ", "")), ("dyu", ("チ゛ュ", "")), ("dye", ("チ゛ェ", "")), ("dyo", ("チ゛ョ", "")),
+            ("dha", ("テ゛ャ", "")), ("dhi", ("テ゛ィ", "")), ("dhu", ("テ゛ュ", "")), ("dhe", ("テ゛ェ", "")), ("dho", ("テ゛ョ", "")),
+                                                             ("t'yu", ("テ゛ュ", "")),
+            ("dwa", ("ト゛ァ", "")), ("dwi", ("ト゛ィ", "")), ("dwu", ("ト゛ゥ", "")), ("dwe", ("ト゛ェ", "")), ("dwo", ("ト゛ォ", "")),
+                                     ("d'i", ("ト゛ィ", "")), ("d'u", ("ト゛ゥ", "")),
+            ( "na", ("ナ"    , "")), ( "ni", ("ニ"    , "")), ( "nu", ("ヌ"    , "")), ( "ne", ("ネ"    , "")), ( "no", ("ノ"    , "")),
+            ("nya", ("ニャ"  , "")), ("nyi", ("ニィ"  , "")), ("nyu", ("ニュ"  , "")), ("nye", ("ニェ"  , "")), ("nyo", ("ニョ"  , "")),
+            ( "ha", ("ハ"    , "")), ( "hi", ("ヒ"    , "")), ( "hu", ("フ"    , "")), ( "he", ("ヘ"    , "")), ( "ho", ("ホ"    , "")),
+            ("hya", ("ヒャ"  , "")), ("hyi", ("ヒィ"  , "")), ("hyu", ("ヒュ"  , "")), ("hye", ("ヒェ"  , "")), ("hyo", ("ヒョ"  , "")),
+            ("hwa", ("ファ"  , "")), ("hwi", ("フィ"  , "")),("hwyu", ("フュ"  , "")), ("hwe", ("フェ"  , "")), ("hwo", ("フォ"  , "")),
+            ( "fa", ("ファ"  , "")), ( "fi", ("フィ"  , "")), ( "fu", ("フ"    , "")), ( "fe", ("フェ"  , "")), ( "fo", ("フォ"  , "")),
+            ("fya", ("フャ"  , "")), ("fyi", ("フィ"  , "")), ("fyu", ("フュ"  , "")), ("fye", ("フェ"  , "")), ("fyo", ("フョ"  , "")),
+            ( "pa", ("ハ゜"  , "")), ( "pi", ("ヒ゜"  , "")), ( "pu", ("フ゜"  , "")), ( "pe", ("ヘ゜"  , "")), ( "po", ("ホ゜"  , "")),
+            ("pya", ("ヒ゜ャ", "")), ("pyi", ("ヒ゜ィ", "")), ("pyu", ("ヒ゜ュ", "")), ("pye", ("ヒ゜ェ", "")), ("pyo", ("ヒ゜ョ", "")),
+            ( "ba", ("ハ゛"  , "")), ( "bi", ("ヒ゛"  , "")), ( "bu", ("フ゛"  , "")), ( "be", ("ヘ゛"  , "")), ( "bo", ("ホ゛"  , "")),
+            ("bya", ("ヒ゛ャ", "")), ("byi", ("ヒ゛ィ", "")), ("byu", ("ヒ゛ュ", "")), ("bye", ("ヒ゛ェ", "")), ("byo", ("ヒ゛ョ", "")),
+            ( "ma", ("マ"    , "")), ( "mi", ("ミ"    , "")), ( "mu", ("ム"    , "")), ( "me", ("メ"    , "")), ( "mo", ("モ"    , "")),
+            ("mya", ("ミャ"  , "")), ("myi", ("ミィ"  , "")), ("myu", ("ミュ"  , "")), ("mye", ("ミェ"  , "")), ("myo", ("ミョ"  , "")),
+            ( "ya", ("ヤ"    , "")), ( "yi", ("イ"    , "")), ( "yu", ("ユ"    , "")), ( "ye", ("イェ"  , "")), ( "yo", ("ヨ"    , "")),
+            ( "ra", ("ラ"    , "")), ( "ri", ("リ"    , "")), ( "ru", ("ル"    , "")), ( "re", ("レ"    , "")), ( "ro", ("ロ"    , "")),
+            ("rya", ("リャ"  , "")), ("ryi", ("リィ"  , "")), ("ryu", ("リュ"  , "")), ("rye", ("リェ"  , "")), ("ryo", ("リョ"  , "")),
+            ( "wa", ("ワ"    , "")), ( "wi", ("ウィ"  , "")), ( "wu", ("ウ"    , "")), ( "we", ("ウェ"  , "")), ( "wo", ("ヲ"    , "")),
+            ("wha", ("ウァ"  , "")), ("whi", ("ウィ"  , "")), ("whu", ("ウ"    , "")), ("whe", ("ウェ"  , "")), ("who", ("ウォ"  , "")),
+            ( "va", ("ヴ゛ァ", "")), ( "vi", ("ヴ゛ィ", "")), ( "vu", ("ヴ゛"  , "")), ( "ve", ("ヴ゛ェ", "")), ( "vo", ("ヴ゛ォ", "")),
+            ("vya", ("ヴ゛ャ", "")), ("vyi", ("ヴ゛ィ", "")), ("vyu", ("ヴ゛ュ", "")), ("vye", ("ヴ゛ェ", "")), ("vyo", ("ヴ゛ョ", "")),
+            ( "xa", ("ァ"    , "")), ( "xi", ("ィ"    , "")), ( "xu", ("ゥ"    , "")), ( "xe", ("ェ"    , "")), ( "xo", ("ォ"    , "")),
+            ("xya", ("ャ"    , "")), ("xyi", ("ィ"    , "")), ("xyu", ("ュ"    , "")), ("xye", ("ェ"    , "")), ("xyo", ("ョ"    , "")),
+                                                              ("xtu", ("ッ"    , "")),
+                                                             ("xtsu", ("ッ"    , "")),
+            ("xwa", ("ヮ"    , "")),                          ("xwu", ("ゥ"    , "")),
+            ( "la", ("ァ"    , "")), ( "li", ("ィ"    , "")), ( "lu", ("ゥ"    , "")), ( "le", ("ェ"    , "")), ( "lo", ("ォ"    , "")),
+            ("lya", ("ャ"    , "")), ("lyi", ("ィ"    , "")), ("lyu", ("ュ"    , "")), ("lye", ("ェ"    , "")), ("lyo", ("ョ"    , "")),
+                                                              ("ltu", ("ッ"    , "")),
+                                                             ("ltsu", ("ッ"    , "")),
+            ("lwa", ("ヮ"    , "")),                          ("lwu", ("ゥ"    , "")),
+                                     ("wyi", ("ヰ"    , "")), ("wyu", (WU      , "")), ("wye", ("ヱ"    , "")),
+                                     ("ywi", (YI      , "")),                          ("ywe", (YE      , "")),
+
+            ("xn", ("ン", "")), ("n", ("ン", "")), ("nn", ("ン", "")), ("n'", ("ン", "")), 
+            ("bb", ("ッ", "b")), ("cc", ("ッ", "c")), ("dd", ("ッ", "d")), ("ff", ("ッ", "f")), ("gg", ("ッ", "g")),
+            ("hh", ("ッ", "h")), ("jj", ("ッ", "j")), ("kk", ("ッ", "k")), ("ll", ("ッ", "l")), ("mm", ("ッ", "m")),
+            ("pp", ("ッ", "p")), ("qq", ("ッ", "q")), ("rr", ("ッ", "r")), ("ss", ("ッ", "s")), ("tt", ("ッ", "t")),
+            ("vv", ("ッ", "v")), ("ww", ("ッ", "w")), ("xx", ("ッ", "x")), ("yy", ("ッ", "y")), ("zz", ("ッ", "z")),
+            ("vv", ("ッ", "v")), ("ww", ("ッ", "w")), ("xx", ("ッ", "x")), ("yy", ("ッ", "y")), ("zz", ("ッ", "z")),
+            ("www", ("ww", "w")),
+            ( "[", ("「", "")), ( "]", ("」", "")), 
+            ("z[", ("『", "")), ("z]", ("』", "")), 
+            ("z/", ("・", "")),
+            ("zx", ("※", ""))
+        };
+
+        list = list.Select(pair => (Util.Normalize(pair.Item1), (Util.Normalize(pair.Item2.Item1), Util.Normalize(pair.Item2.Item2)))).ToList();
+        var trie = new Trie();
+        foreach (var item in list) {
+            trie.AddEntry(item.Item1, item.Item2.Item1, item.Item2.Item2);
+        }
+
+        return trie;    
+    }
+
+    public static readonly Trie ConversionTrie = ConversionTrieFunc();
 }

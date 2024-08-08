@@ -24,13 +24,14 @@ projection = 1
 size = 260.0
 
 [node name="Title" parent="." instance=ExtResource( 1 )]
-transform = Transform( 0.5, 0, 0, 0, 0.5, 0, 0, 0, 0.5, 41, 0, -3 )
-Text = "46セグメントディスプレイ"
-Height = 12
+transform = Transform( 0.5, 0, 0, 0, 0.5, 0, 0, 0, 0.5, 41, 0, -4 )
+Text = "46セグメントディスプレイ　　ハヤシ　ヨリ"
+Height = 20
 Width = 1
+Color = Color( 1, 0.18, 0.18, 1 )
 
 [node name="MeshInstance" parent="." instance=ExtResource( 1 )]
-Text = "ショウリャクテキストゥぎゅう"
+Text = "プレースホルダーテキスト"
 Height = 10
 Width = 11
 Editable = true

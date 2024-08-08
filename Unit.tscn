@@ -11,6 +11,9 @@ mesh = ExtResource( 1 )
 transform_array = PoolVector3Array( 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0 )
 custom_data_array = PoolColorArray( 0, 0, 0, 0 )
 
-[node name="MeshInstance" type="MultiMeshInstance"]
-multimesh = SubResource( 1 )
+[node name="Spatial" type="Spatial"]
 script = ExtResource( 3 )
+
+[node name="Mesh" type="MultiMeshInstance" parent="."]
+unique_name_in_owner = true
+multimesh = SubResource( 1 )

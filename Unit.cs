@@ -4,20 +4,31 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-public class Unit : MultiMeshInstance
+[Tool]
+public class Unit : Spatial
 {
     // Declare member variables here. Examples:
     // private int a = 2;
     // private string b = "text";
 
+    string _text;
     [Export]
-    public string Text { get; set; }
+    public string Text {
+        get => _text;
+        set {
+            _text = value;
+            if (_mesh != null)
+                EditorUpdateText();
+        }
+    }
     [Export]
     public int Height { get; set; }
     [Export]
     public int Width { get; set; }
     [Export]
     public bool Editable { get; set; }
+    [Export]
+    public Color Color = new Color(0.5f, 0.5f, 1.0f);
 
     List<string> _editTextAbove;
     List<string> _editTextBelow;
@@ -25,6 +36,9 @@ public class Unit : MultiMeshInstance
     int CursorPos => _editTextAbove.Count;
     int EditTextLength => _editTextAbove.Count + _editTextBelow.Count;
     float _cursorTime;
+    bool _latin = false;
+    MultiMeshInstance _mesh;
+
     const float CursorPeriod = 1.0f;
 
     const int Span = 3;
@@ -35,10 +49,17 @@ public class Unit : MultiMeshInstance
     {
         //string text = "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤいユえヨラリルレロワヰうヱヲン" +
         //    "゛゜ー＝ァィゥェォャュョヮッ";
-        Multimesh = (MultiMesh)Multimesh.Duplicate();
-        Multimesh.InstanceCount = Height * Width;
+        _mesh = GetNode<MultiMeshInstance>("%Mesh");
+        if (GetTree().EditedSceneRoot != this)
+            _mesh.Multimesh = (MultiMesh)_mesh.Multimesh.Duplicate();
+        EditorUpdateText();
+    }
+
+    public void EditorUpdateText()
+    {
+        _mesh.Multimesh.InstanceCount = Height * Width;
         for (int i = 0; i < Height * Width; ++i) {
-            Multimesh.SetInstanceTransform(i, new Transform(Basis.Identity, new Vector3((i / Height) * -40, 0, (i % Height) * 24)));
+            _mesh.Multimesh.SetInstanceTransform(i, new Transform(Basis.Identity, new Vector3((i / Height) * -40, 0, (i % Height) * 24)));
         }
 
         _editTextAbove = NormalizeDisplayText(Text);
@@ -54,7 +75,7 @@ public class Unit : MultiMeshInstance
     // • 3 characters per display unit (main, dakuten, sutegana)
     static List<string> NormalizeDisplayText(string text) {
         // Zenkaku + separated (han)dakuten
-        text = string.Join("", Util.Chars(text).Select(c => Util.NormalizationMap.ContainsKey(c) ? Util.NormalizationMap[c] : c));
+        text = Util.Normalize(text);
         // Spaces
         var result = new List<string>();
         int iter = 0;
@@ -83,12 +104,13 @@ public class Unit : MultiMeshInstance
                 Util.SegmentMap[$"{editText[Span * i + 0]}"] |
                 Util.SegmentMap[$"{editText[Span * i + 1]}"] |
                 Util.SegmentMap[$"{editText[Span * i + 2]}"];
+            ulong color = (ulong)(Color.r8 | Color.g8 << 8 | Color.b8 << 16);
             
-            if (Editable && i == CursorPos / Span && _cursorTime < 0.5)
-                field ^= Util.CursorBitfield;
+            if (!Engine.EditorHint && Editable && i == CursorPos / Span && _cursorTime < 0.5)
+                field ^= _latin ? Util.LatinCursorBitfield : Util.CursorBitfield;
             if (_pendingPos != null && i >= _pendingPos / Span && i < CursorPos / Span)
                 field |= Util.PendingBitfield;
-            Multimesh.SetInstanceCustomData(i, new Color(field % (1 << 24), field >> 24, 0.0f, 0.0f));
+            _mesh.Multimesh.SetInstanceCustomData(i, new Color(field % (1 << 24), field >> 24, color, 0.0f));
         }
     }
 
@@ -111,17 +133,52 @@ public class Unit : MultiMeshInstance
         _cursorTime = 0;
     }
 
-    void AttemptCharConversion() {
+    (string Transformed, string Leftover) DoCharConversion() {
+        int pending = _pendingPos.Value;
 
+        string toLookup = "";
+        for (int i = pending; i < CursorPos; i += 3)
+            toLookup += _editTextAbove[i];
+        _editTextAbove.RemoveRange(pending, CursorPos - pending);
+
+        return Util.ConversionTrie.Lookup(toLookup);
+    }
+
+    // Returns true if special
+    bool AddChar(string letter) {
+        bool special = false;
+        if (Util.Sutegana.Contains(letter)) {
+            special = true;
+            if (_editTextAbove.Last() == "　") {
+                _editTextAbove[_editTextAbove.Count - 1] = letter;
+                return true;
+            }
+        } else if (Util.Dakuten.Contains(letter)) {
+            special = true;
+            if (_editTextAbove[_editTextAbove.Count - 2] == "　" && _editTextAbove.Last() == "　") {
+                _editTextAbove[_editTextAbove.Count - 2] = letter;
+                return true;
+            }
+        }
+
+        var normalized = NormalizeDisplayText(letter);
+        _editTextAbove.AddRange(normalized);
+        return special;
     }
 
     public override void _Input(InputEvent @event)
     {
-        if (!Editable) return;
+        if (Engine.EditorHint || !Editable) return;
         if (!(@event is InputEventKey)) return;
 
         var keyEvent = (InputEventKey)@event;
         if (!@event.IsPressed()) return;
+
+        if (keyEvent.GetScancodeWithModifiers() == ((uint)KeyModifierMask.MaskCtrl | (uint)KeyList.L)) {
+            _latin = !_latin;
+            _pendingPos = null;
+            return;
+        }
 
         if (DirectionDistances.ContainsKey((KeyList)keyEvent.Scancode)) {
             var (X, Y) = DirectionDistances[(KeyList)keyEvent.Scancode];
@@ -159,39 +216,36 @@ public class Unit : MultiMeshInstance
             return;
         }
 
+        if ((KeyList)keyEvent.Scancode == KeyList.Enter) {
+            _pendingPos = null;
+            return;
+        }
+
         string letter = char.ConvertFromUtf32((int)keyEvent.Unicode);
-        letter = Util.NormalizationMap.ContainsKey(letter) ? Util.NormalizationMap[letter] : letter;
+        letter = Util.Normalize(letter);
         if (!Util.SegmentMap.ContainsKey(letter))
             return;
 
-        if (Util.Sutegana.Contains(letter)) {
-            if (_editTextAbove.Last() == "　") {
-                _editTextAbove[_editTextAbove.Count - 1] = letter;
-                _pendingPos = null;
-                return;
-            }
-        } else if (Util.Dakuten.Contains(letter)) {
-            if (_editTextAbove[_editTextAbove.Count - 2] == "　" && _editTextAbove.Last() == "　") {
-                _editTextAbove[_editTextAbove.Count - 2] = letter;
-                _pendingPos = null;
-                return;
-            }
+        var special = AddChar(letter);
+        if (_latin || special) {
+            _pendingPos = null;
+            return;
         }
 
-        var normalized = NormalizeDisplayText(letter);
-        _editTextAbove.AddRange(normalized);
-        if (Util.Lowercase.Contains(letter)) {
-            if (_pendingPos == null)
-                _pendingPos = CursorPos - Span;
-            AttemptCharConversion();
-        } else {
-            _pendingPos = null;
-        }
+        if (_pendingPos == null)
+            _pendingPos = CursorPos - Span;
+        (string Transformed, string Leftover) = DoCharConversion();
+
+        foreach (var c in Util.Chars(Transformed))
+            AddChar(c);
+        _pendingPos = CursorPos;
+        foreach (var c in Util.Chars(Leftover))
+            AddChar(c);
     }
 
     public override void _Process(float delta)
     {
-        if (!Editable) return;
+        if (Engine.EditorHint || !Editable) return;
 
         _cursorTime = (_cursorTime + delta) % CursorPeriod;
         DisplayText();
