@@ -21,10 +21,13 @@ public class Unit : MultiMeshInstance
 
     List<string> _editTextAbove;
     List<string> _editTextBelow;
+    int? _pendingPos = null;
     int CursorPos => _editTextAbove.Count;
     int EditTextLength => _editTextAbove.Count + _editTextBelow.Count;
     float _cursorTime;
     const float CursorPeriod = 1.0f;
+
+    const int Span = 3;
 
 
     // Called when the node enters the scene tree for the first time.
@@ -66,7 +69,7 @@ public class Unit : MultiMeshInstance
             } else {
                 result.Add("　");
             }
-            mode = (mode + 1) % 3;
+            mode = (mode + 1) % Span;
             if (iter == chars.Count && mode == 0)
                 break;
         }
@@ -76,13 +79,15 @@ public class Unit : MultiMeshInstance
     void DisplayText() {
         var editText = _editTextAbove.Concat(_editTextBelow.Reverse<string>()).ToList();
         for (int i = 0; i < Height * Width; ++i) {
-            ulong field = 3 * i >= editText.Count ? 0uL :
-                Util.SegmentMap[$"{editText[3 * i + 0]}"] |
-                Util.SegmentMap[$"{editText[3 * i + 1]}"] |
-                Util.SegmentMap[$"{editText[3 * i + 2]}"];
+            ulong field = Span * i >= editText.Count ? 0uL :
+                Util.SegmentMap[$"{editText[Span * i + 0]}"] |
+                Util.SegmentMap[$"{editText[Span * i + 1]}"] |
+                Util.SegmentMap[$"{editText[Span * i + 2]}"];
             
-            if (Editable && 3 * i == _editTextAbove.Count && _cursorTime < 0.5)
+            if (Editable && i == CursorPos / Span && _cursorTime < 0.5)
                 field ^= Util.CursorBitfield;
+            if (_pendingPos != null && i >= _pendingPos / Span && i < CursorPos / Span)
+                field |= Util.PendingBitfield;
             Multimesh.SetInstanceCustomData(i, new Color(field % (1 << 24), field >> 24, 0.0f, 0.0f));
         }
     }
@@ -95,15 +100,19 @@ public class Unit : MultiMeshInstance
     };
 
     void MoveCursorForward() {
-        _editTextAbove.Add(_editTextBelow[_editTextBelow.Count - 1]);
+        _editTextAbove.Add(_editTextBelow.Last());
         _editTextBelow.RemoveAt(_editTextBelow.Count - 1);
         _cursorTime = 0;
     }
 
     void MoveCursorBack() {
-        _editTextBelow.Add(_editTextAbove[_editTextAbove.Count - 1]);
+        _editTextBelow.Add(_editTextAbove.Last());
         _editTextAbove.RemoveAt(_editTextAbove.Count - 1);
         _cursorTime = 0;
+    }
+
+    void AttemptCharConversion() {
+
     }
 
     public override void _Input(InputEvent @event)
@@ -116,14 +125,67 @@ public class Unit : MultiMeshInstance
 
         if (DirectionDistances.ContainsKey((KeyList)keyEvent.Scancode)) {
             var (X, Y) = DirectionDistances[(KeyList)keyEvent.Scancode];
-            int distance = Mathf.Clamp(X * 3 * Height + Y * 3, -CursorPos, EditTextLength - CursorPos);
+
+            int distance = Mathf.Clamp(X * Span * Height + Y * Span, -CursorPos, EditTextLength - CursorPos);
             if (distance > 0)
                 for (int i = 0; i < distance; ++i)
                     MoveCursorForward();
             if (distance < 0)
                 for (int i = 0; i < -distance; ++i)
                     MoveCursorBack();
+            _pendingPos = null;
             return;
+        }
+
+        // Deleting text
+        if ((KeyList)keyEvent.Scancode == KeyList.Backspace && CursorPos != 0) {
+            if (_editTextAbove.Last() == "　" ||
+                (_editTextAbove[_editTextAbove.Count - Span] == "　" && _editTextAbove[_editTextAbove.Count - 2] == "　"))
+                _editTextAbove.RemoveRange(_editTextAbove.Count - Span, Span);
+            else
+                _editTextAbove[_editTextAbove.Count - 1] = "　";
+            if (CursorPos <= _pendingPos)
+                _pendingPos = null;
+            return;
+        }
+
+        if ((KeyList)keyEvent.Scancode == KeyList.Delete && CursorPos != EditTextLength) {
+            if (_editTextBelow[_editTextBelow.Count - Span] == "　" ||
+                (_editTextBelow.Last() == "　" && _editTextBelow[_editTextBelow.Count - 2] == "　"))
+                _editTextBelow.RemoveRange(_editTextBelow.Count - Span, Span);
+            else
+                _editTextBelow[_editTextBelow.Count - 1] = _editTextBelow[_editTextBelow.Count - 2] = "　";
+            _pendingPos = null;
+            return;
+        }
+
+        string letter = char.ConvertFromUtf32((int)keyEvent.Unicode);
+        letter = Util.NormalizationMap.ContainsKey(letter) ? Util.NormalizationMap[letter] : letter;
+        if (!Util.SegmentMap.ContainsKey(letter))
+            return;
+
+        if (Util.Sutegana.Contains(letter)) {
+            if (_editTextAbove.Last() == "　") {
+                _editTextAbove[_editTextAbove.Count - 1] = letter;
+                _pendingPos = null;
+                return;
+            }
+        } else if (Util.Dakuten.Contains(letter)) {
+            if (_editTextAbove[_editTextAbove.Count - 2] == "　" && _editTextAbove.Last() == "　") {
+                _editTextAbove[_editTextAbove.Count - 2] = letter;
+                _pendingPos = null;
+                return;
+            }
+        }
+
+        var normalized = NormalizeDisplayText(letter);
+        _editTextAbove.AddRange(normalized);
+        if (Util.Lowercase.Contains(letter)) {
+            if (_pendingPos == null)
+                _pendingPos = CursorPos - Span;
+            AttemptCharConversion();
+        } else {
+            _pendingPos = null;
         }
     }
 

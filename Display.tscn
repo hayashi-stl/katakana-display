@@ -30,7 +30,7 @@ Height = 12
 Width = 1
 
 [node name="MeshInstance" parent="." instance=ExtResource( 1 )]
-Text = "プレースホルダーテキスト"
+Text = "ショウリャクテキストゥぎゅう"
 Height = 10
 Width = 11
 Editable = true

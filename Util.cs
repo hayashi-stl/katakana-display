@@ -94,7 +94,7 @@ public class Util {
         {"０", 0b00_0000_0000_0000_0000_0001_1000_0000_0001_1001_0001_1110},
         {"１", 0b00_0000_0000_0000_0000_0001_1000_0000_0000_0011_1100_1000},
         {"２", 0b00_0000_0000_0000_0000_0001_1000_0000_1100_1000_0001_1100},
-        {"３", 0b00_0000_0000_0000_0000_0001_1000_0000_1101_1000_0001_1000},
+        {"３", 0b00_0000_0000_0000_0000_0001_1000_0000_1001_1000_0001_1000},
         {"４", 0b00_0000_0000_0000_0000_0000_0000_0000_1101_1000_0000_0010},
         {"５", 0b00_0000_0000_0000_0000_0001_1000_0000_1101_0000_0001_1010},
         {"６", 0b00_0000_0000_0000_0000_0001_1000_0000_1101_0000_0001_1110},
@@ -178,10 +178,13 @@ public class Util {
 
         {"　", 0b00_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000},
 
+        {Pending, PendingBitfield},
     };
 
     public const ulong CursorBitfield = 0b00_0000_0000_0000_0000_0000_0000_0000_0000_0000_0001_1000;
     public const ulong SuteganaCursorBitfield = 0b00_0000_0000_0001_1000_0000_0000_0000_0000_0000_0000_0000;
+    public const string Pending = "_";
+    public const ulong PendingBitfield = 0b00_0000_0000_0000_0000_0010_0000_0000_0000_0000_0000_0000;
 
     static Dictionary<string, string> NormalizationMapFunc() {
         string hankaku = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-=.,()[]{}·<>~!? ";
@@ -198,9 +201,11 @@ public class Util {
         string extraB = "゛゜゛゜〈〉";
 
         string hiragana = $"あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもや{Yi}ゆ{Ye}よらりるれろわゐ{Wu}ゑをん" +
-            $"がぎぐげござじずぜぞだぢづでどばびぶべぼゔぱぴぷぺぽ";
+            $"がぎぐげござじずぜぞだぢづでどばびぶべぼゔぱぴぷぺぽ" +
+            $"ぁぃぅぇぉゃゅょゎっ";
         string katakana = $"アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤ{YI}ユ{YE}ヨラリルレロワヰ{WU}ヱヲン" +
-            $"ガギグゲゴザジズゼゾダヂヅデドバビブベボヴパピプペポ";
+            $"ガギグゲゴザジズゼゾダヂヅデドバビブベボヴパピプペポ" +
+            $"ァィゥェォャュョヮッ";
 
         var dict = Chars(hankaku).Zip(Chars(zenkaku), (a, b) => (a, b))
             .Concat(Chars(withDakuten).Zip(Chars(withoutDakuten), (a, b) => (a, $"{b}゛")))
@@ -221,4 +226,5 @@ public class Util {
 
     public static readonly HashSet<string> Dakuten =  Chars("゛゜").ToHashSet();
     public static readonly HashSet<string> Sutegana = Chars("ァィゥェォャュョヮッ").ToHashSet();
+    public static readonly HashSet<string> Lowercase = Chars("ａｂｃｄｅｆｇｈｉｊｋｌｍｎｏｐｑｒｓｔｕｖｗｘｙｚ").ToHashSet();
 }
